@@ -3,15 +3,24 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 
-# ── Auto-detect: PostgreSQL (Render pe) ya SQLite (local) ─────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 
+def clean(val):
+    """numpy types ko plain Python types mein convert karo."""
+    import numpy as np
+    if isinstance(val, (np.integer,)):
+        return int(val)
+    if isinstance(val, (np.floating,)):
+        return float(val)
+    if isinstance(val, (np.bool_,)):
+        return bool(val)
+    return val
+
+
 def get_connection():
-    """PostgreSQL ya SQLite connection return karta hai."""
     if DATABASE_URL:
         import psycopg2
-        # Render ka DATABASE_URL "postgres://" se start hota hai, psycopg2 ko "postgresql://" chahiye
         url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         return psycopg2.connect(url)
     else:
@@ -23,7 +32,6 @@ def is_postgres():
 
 
 def init_db():
-    """Table create karo agar exist nahi karti."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -110,7 +118,11 @@ def init_db():
 
 
 def save_prediction(data: dict):
-    """Ek prediction record database mein save karo."""
+    """Prediction save karo — numpy types automatically convert honge."""
+
+    # ── Saare values clean karo ──────────────────────────────────────
+    d = {k: clean(v) for k, v in data.items()}
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -130,17 +142,17 @@ def save_prediction(data: dict):
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
             )
         """, (
-            data["applicant_name"], data["age"], data["gender"],
-            data["marital_status"], data["education"], data["dependents"],
-            data["employment"], data["annual_income"], data["monthly_expense"],
-            data["work_exp"], data["job_stability"], data["loan_amount"],
-            data["loan_tenure"], data["loan_purpose"], data["interest_rate"],
-            data["collateral"], data["credit_score"], data["existing_loans"],
-            data["missed_payments"], data["debt_to_income"], data["savings"],
-            data["investments"], data["property_owned"], data["residence_type"],
-            data["area_type"], data["insurance"], data["credit_history"],
-            data["emi"], data["approve_prob"], data["reject_prob"],
-            data["prediction"]
+            d["applicant_name"], d["age"], d["gender"],
+            d["marital_status"], d["education"], d["dependents"],
+            d["employment"], d["annual_income"], d["monthly_expense"],
+            d["work_exp"], d["job_stability"], d["loan_amount"],
+            d["loan_tenure"], d["loan_purpose"], d["interest_rate"],
+            d["collateral"], d["credit_score"], d["existing_loans"],
+            d["missed_payments"], d["debt_to_income"], d["savings"],
+            d["investments"], d["property_owned"], d["residence_type"],
+            d["area_type"], d["insurance"], d["credit_history"],
+            d["emi"], d["approve_prob"], d["reject_prob"],
+            d["prediction"]
         ))
     else:
         cur.execute("""
@@ -157,17 +169,17 @@ def save_prediction(data: dict):
                 ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
             )
         """, (
-            data["applicant_name"], data["age"], data["gender"],
-            data["marital_status"], data["education"], data["dependents"],
-            data["employment"], data["annual_income"], data["monthly_expense"],
-            data["work_exp"], data["job_stability"], data["loan_amount"],
-            data["loan_tenure"], data["loan_purpose"], data["interest_rate"],
-            data["collateral"], data["credit_score"], data["existing_loans"],
-            data["missed_payments"], data["debt_to_income"], data["savings"],
-            data["investments"], data["property_owned"], data["residence_type"],
-            data["area_type"], data["insurance"], data["credit_history"],
-            data["emi"], data["approve_prob"], data["reject_prob"],
-            data["prediction"]
+            d["applicant_name"], d["age"], d["gender"],
+            d["marital_status"], d["education"], d["dependents"],
+            d["employment"], d["annual_income"], d["monthly_expense"],
+            d["work_exp"], d["job_stability"], d["loan_amount"],
+            d["loan_tenure"], d["loan_purpose"], d["interest_rate"],
+            d["collateral"], d["credit_score"], d["existing_loans"],
+            d["missed_payments"], d["debt_to_income"], d["savings"],
+            d["investments"], d["property_owned"], d["residence_type"],
+            d["area_type"], d["insurance"], d["credit_history"],
+            d["emi"], d["approve_prob"], d["reject_prob"],
+            d["prediction"]
         ))
 
     conn.commit()
@@ -176,18 +188,15 @@ def save_prediction(data: dict):
 
 
 def get_all_predictions() -> pd.DataFrame:
-    """Saari predictions fetch karo DataFrame mein."""
     conn = get_connection()
     df = pd.read_sql_query(
-        "SELECT * FROM predictions ORDER BY created_at DESC",
-        conn
+        "SELECT * FROM predictions ORDER BY created_at DESC", conn
     )
     conn.close()
     return df
 
 
 def get_stats() -> dict:
-    """Dashboard ke liye summary stats."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -213,10 +222,10 @@ def get_stats() -> dict:
     conn.close()
 
     return {
-        "total": total,
-        "approved": approved,
-        "rejected": rejected,
-        "avg_prob": round(avg_prob, 1),
+        "total":      total,
+        "approved":   approved,
+        "rejected":   rejected,
+        "avg_prob":   round(avg_prob, 1),
         "avg_credit": round(avg_credit, 1),
-        "avg_loan": round(avg_loan, 0),
+        "avg_loan":   round(avg_loan, 0),
     }
